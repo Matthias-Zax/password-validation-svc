@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance to run the password validation service with Java pre-installed
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: '/'
+
+  RolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2InstancePermissions
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource: 
+              - arn:aws:s3:::your-bucket-name/path-to-your-app-bundle  # Replace with the S3 path to your app bundle
+      Roles:
+        - Ref: InstanceRole
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: '/'
+      Roles:
+        - Ref: InstanceRole
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the password validation service EC2 instance
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+
+  ServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro  # Modify as required
+      ImageId: ami-0c55b159cbfafe1f0  # Amazon Linux 2 LTS Candidate AMI ID (This ID might change based on your region and the latest version. Please verify before using.)
+      KeyName: your-key-name  # Replace with your EC2 key pair name
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      IamInstanceProfile: 
+        Ref: InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y java-11-openjdk-devel
+          aws s3 cp s3://your-bucket-name/path-to-your-app-bundle /path/to/download/location  # Download your app bundle from S3
+          # Extract, set permissions, and run your service
+          # ...
+
+Outputs:
+  InstancePublicIP:
+    Description: Public IP address of the EC2 instance
+    Value:
+      Fn::GetAtt: [ServiceInstance, PublicIp]
